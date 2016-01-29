@@ -1,0 +1,13 @@
+nbproject
+._*
+.~lock.*
+.buildpath
+.idea
+.project
+.settings
+vendor/
+!.gitkeep
+cache.properties
+/.php_cs.cache
+/deployment.properties
+tests/_output/*
