@@ -57,11 +57,9 @@ class Artemis
 
         $data['body']['trace'] = $this->getExceptionTrace($exception, $extra);
 
-        // request, server, person data
         $data['request'] = $this->getRequest();
-
         $data['server'] = $this->getServer();
-        $data['person'] = $this->getUser();
+        $data['user'] = $this->getUser();
 
         if (is_array($payload)) {
             array_merge_recursive($data, $payload);
@@ -151,10 +149,9 @@ class Artemis
             )
         );
 
-        // request, server, person data
         $data['request'] = $this->getRequest();
         $data['server'] = $this->getServer();
-        $data['person'] = $this->getUser();
+        $data['user'] = $this->getUser();
 
         $logFile = $this->logDir . '/error-' . getmypid() . '-' . microtime(true) . '.kharon';
         file_put_contents($logFile, json_encode($data, null, 100));
@@ -205,13 +202,21 @@ class Artemis
         );
 
         if ($_GET) {
-            $request['GET'] = $this->hideFields($_GET);
-        }
-        if ($_POST) {
-            $request['POST'] = $this->hideFields($_POST);
+            $request['GET'] = $this->hideParams($_GET);
         }
         if (isset($_SESSION) && $_SESSION) {
-            $request['session'] = $this->hideFields($_SESSION);
+            $request['session'] = $this->hideParams($_SESSION);
+        }
+        if ($_POST) {
+            $request['POST'] = $this->hideParams($_POST);
+        } else {
+            $data = file_get_contents('php://input');
+            if (!empty($data)) {
+                $data = json_decode($data, true);
+                if ($data) {
+                    $request['BODY'] = $this->hideParams($data);
+                }
+            }
         }
 
         return $request;
@@ -298,7 +303,7 @@ class Artemis
         }
         $parsed = [];
         parse_str($query, $parsed);
-        $params = $this->hideFields($parsed, 'x');
+        $params = $this->hideParams($parsed, 'x');
         $new = str_replace($query, http_build_query($params), $url);
         return $new;
     }
