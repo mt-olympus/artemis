@@ -3,6 +3,7 @@ namespace Artemis;
 
 class Artemis
 {
+    /** @var Artemis */
     public static $instance = null;
 
     private $logDir;
@@ -23,7 +24,7 @@ class Artemis
         }
     }
 
-    public static function init($config = [], $set_exception_handler = true, $set_error_handler = true, $report_fatal_errors = true)
+    public static function init($config = [], $useExceptionHandler = true, $useErrorHandler = true, $useFatalErrors = true)
     {
         if (!isset($config['log_dir'])) {
             $config['log_dir'] = 'data/kharon/artemis';
@@ -35,20 +36,20 @@ class Artemis
 
         self::$instance = new Artemis($config);
 
-        if ($set_exception_handler) {
+        if ($useExceptionHandler) {
             set_exception_handler([self::$instance, 'handleException']);
         }
-        if ($set_error_handler) {
+        if ($useErrorHandler) {
             set_error_handler([self::$instance, 'handleError']);
         }
-        if ($report_fatal_errors) {
+        if ($useFatalErrors) {
             register_shutdown_function([self::$instance, 'handleFatal']);
         }
 
         return self::$instance;
     }
 
-    private function handleException(\Exception $exception, $extra = null, $payload = null)
+    public function handleException($exception, $extra = null, $payload = null)
     {
         $data = [
             'time' => microtime(true),
@@ -57,7 +58,7 @@ class Artemis
         $data['body']['trace'] = $this->getExceptionTrace($exception, $extra);
 
         // request, server, person data
-        $data['request'] = $this->getRequestData();
+        $data['request'] = $this->getRequest();
 
         $data['server'] = $this->getServer();
         $data['person'] = $this->getUser();
@@ -66,11 +67,100 @@ class Artemis
             array_merge_recursive($data, $payload);
         }
 
-        $logFile = $this->logDir . '/exception-' . getmypid() . '-' . microtime(true) . '.artemis';
+        $logFile = $this->logDir . '/exception-' . getmypid() . '-' . microtime(true) . '.kharon';
         file_put_contents($logFile, json_encode($data, null, 100));
     }
 
-    private function getExceptionTrace(\Exception $exception, $extra = null)
+    public function handleFatal()
+    {
+        $last_error = error_get_last();
+        if ($last_error != null) {
+            switch ($last_error['type']) {
+                case E_PARSE:
+                case E_ERROR:
+                    $this->handleError($last_error['type'], $last_error['message'], $last_error['file'], $last_error['line']);
+                    break;
+            }
+        }
+    }
+
+    public function handleError($errno, $errstr, $errfile, $errline)
+    {
+        $data = [
+            'time' => microtime(true),
+        ];
+
+        // set error level and error constant name
+        $level = 'info';
+        $constant = '#' . $errno;
+        switch ($errno) {
+            case 1:
+                $level = 'error';
+                $constant = 'E_ERROR';
+                break;
+            case 2:
+                $level = 'warning';
+                $constant = 'E_WARNING';
+                break;
+            case 4:
+                $level = 'critical';
+                $constant = 'E_PARSE';
+            case 8:
+                $level = 'info';
+                $constant = 'E_NOTICE';
+                break;
+            case 256:
+                $level = 'error';
+                $constant = 'E_USER_ERROR';
+                break;
+            case 512:
+                $level = 'warning';
+                $constant = 'E_USER_WARNING';
+                break;
+            case 1024:
+                $level = 'info';
+                $constant = 'E_USER_NOTICE';
+                break;
+            case 2048:
+                $level = 'info';
+                $constant = 'E_STRICT';
+                break;
+            case 4096:
+                $level = 'error';
+                $constant = 'E_RECOVERABLE_ERROR';
+                break;
+            case 8192:
+                $level = 'info';
+                $constant = 'E_DEPRECATED';
+                break;
+            case 16384:
+                $level = 'info';
+                $constant = 'E_USER_DEPRECATED';
+                break;
+        }
+        $data['level'] = $level;
+
+        $error_class = $constant . ': ' . $errstr;
+
+        $data['body'] = array(
+            'trace' => array(
+                'frames' => $this->getErrorData($errfile, $errline),
+                'exception' => array(
+                    'class' => $error_class
+                )
+            )
+        );
+
+        // request, server, person data
+        $data['request'] = $this->getRequest();
+        $data['server'] = $this->getServer();
+        $data['person'] = $this->getUser();
+
+        $logFile = $this->logDir . '/error-' . getmypid() . '-' . microtime(true) . '.kharon';
+        file_put_contents($logFile, json_encode($data, null, 100));
+    }
+
+    private function getExceptionTrace($exception, $extra = null)
     {
         $message = $exception->getMessage();
 
@@ -82,8 +172,8 @@ class Artemis
 
         foreach ($exception->getTrace() as $frame) {
             $frames[] = [
-                'filename' => @$frame['file'] ?: '<internal>',
-                'lineno' => @$frame['line'] ?: 0,
+                'filename' => isset($frame['file']) ? $frame['file'] : '<internal>',
+                'lineno' => isset($frame['line']) ? $frame['line'] : 0,
                 'method' => $frame['function']
             ];
         }
@@ -105,13 +195,13 @@ class Artemis
         return $trace;
     }
 
-    private function getRequestData()
+    private function getRequest()
     {
         $request = array(
             'url' => $this->handleUrl($this->getUrl()),
             'user_ip' => $this->getRemoteIp(),
             'headers' => $this->getHeaders(),
-            'method' => @$_SERVER['REQUEST_METHOD'] ?: null
+            'method' => isset($_SERVER['REQUEST_METHOD']) ? $_SERVER['REQUEST_METHOD'] : null
         );
 
         if ($_GET) {
@@ -170,16 +260,16 @@ class Artemis
 
     private function getRemoteIp()
     {
-        $forwarded = @$_SERVER['HTTP_X_FORWARDED_FOR'] ?: null;
+        $forwarded = isset($_SERVER['HTTP_X_FORWARDED_FOR']) ? $_SERVER['HTTP_X_FORWARDED_FOR'] : null;
         if ($forwarded) {
             $parts = explode(',', $forwarded);
             return $parts[0];
         }
-        $realIp = @$_SERVER['HTTP_X_REAL_IP'] ?: null;
+        $realIp = isset($_SERVER['HTTP_X_REAL_IP']) ? $_SERVER['HTTP_X_REAL_IP'] : null;
         if ($realIp) {
             return $realIp;
         }
-        return @$_SERVER['REMOTE_ADDR'] ?: null;
+        return isset($_SERVER['REMOTE_ADDR']) ? $_SERVER['REMOTE_ADDR'] : null;
     }
 
     private function getHeaders()
@@ -243,4 +333,30 @@ class Artemis
         return null;
     }
 
+    private function getErrorData($errfile, $errline)
+    {
+        $frames = [];
+        $backtrace = debug_backtrace();
+        foreach ($backtrace as $frame) {
+            if (isset($frame['file']) && $frame['file'] == __FILE__) {
+                continue;
+            }
+            if ($frame['function'] == 'report_php_error' && count($frames) == 0) {
+                continue;
+            }
+
+            $frames[] = [
+                'filename' => isset($frame['file']) ? $frame['file'] : "<internal>",
+                'lineno' => isset($frame['line']) ? $frame['line'] : 0,
+                'method' => $frame['function'],
+            ];
+        }
+
+        $frames[] = array(
+            'filename' => $errfile,
+            'lineno' => $errline
+        );
+
+        return $frames;
+    }
 }
