@@ -8,24 +8,29 @@ class Artemis
 
     private $logDir;
 
+    private $apiKey;
+
     private $hideFields = [
         'password'
     ];
 
-    public function __construct($config)
+    private function __construct($config)
     {
-        if (!isset($config['log_dir'])) {
-            $config['log_dir'] = 'data/kharon/artemis';
-        }
         $this->logDir = $config['log_dir'];
 
         if (isset($config['hide_fields'])) {
             $this->hideFields = $config['hide_fields'];
         }
+
+        $this->apiKey = isset($config['api_key']) ? $config['api_key'] : null;
     }
 
     public static function init($config = [], $useExceptionHandler = true, $useErrorHandler = true, $useFatalErrors = true)
     {
+        if (isset($config['enabled']) && $config['enabled'] === false) {
+            return null;
+        }
+
         if (!isset($config['log_dir'])) {
             $config['log_dir'] = 'data/kharon/artemis';
         }
@@ -49,11 +54,20 @@ class Artemis
         return self::$instance;
     }
 
-    public function handleException($exception, $extra = null, $payload = null)
+    private function prepareData()
     {
-        $data = [
+        $ret = [
             'time' => microtime(true),
         ];
+        if (!empty($this->apiKey)) {
+            $ret['api_key'] = $this->apiKey;
+        }
+        return $ret;
+    }
+
+    public function handleException($exception, $extra = null, $payload = null)
+    {
+        $data = $this->prepareData();
 
         $data['body']['trace'] = $this->getExceptionTrace($exception, $extra);
 
@@ -84,9 +98,7 @@ class Artemis
 
     public function handleError($errno, $errstr, $errfile, $errline)
     {
-        $data = [
-            'time' => microtime(true),
-        ];
+        $data = $this->prepareData();
 
         // set error level and error constant name
         $level = 'info';
