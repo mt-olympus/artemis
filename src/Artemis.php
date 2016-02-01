@@ -14,6 +14,8 @@ class Artemis
         'password'
     ];
 
+    private $handled = [];
+
     private function __construct($config)
     {
         $this->logDir = $config['log_dir'];
@@ -96,8 +98,32 @@ class Artemis
         }
     }
 
+    private function errorHandled($errno, $errstr, $errfile, $errline)
+    {
+        foreach ($this->handled as $handled) {
+            if (isset($handled['errno']) && $handled['errno'] == $errno &&
+                isset($handled['errstr']) && $handled['errstr'] == $errstr &&
+                isset($handled['errfile']) && $handled['errfile'] == $errfile &&
+                isset($handled['errline']) && $handled['errline'] == $errline) {
+                    return true;
+                }
+        }
+        return false;
+    }
+
     public function handleError($errno, $errstr, $errfile, $errline)
     {
+        if (!$this->errorHandled($errno, $errstr, $errfile, $errline)) {
+            $this->handled[] = [
+                'errno' => $errno,
+                'errstr' => $errstr,
+                'errfile' => $errfile,
+                'errline' => $errline,
+            ];
+        } else {
+            return;
+        }
+
         $data = $this->prepareData();
 
         // set error level and error constant name
@@ -358,9 +384,6 @@ class Artemis
             if (isset($frame['file']) && $frame['file'] == __FILE__) {
                 continue;
             }
-            if ($frame['function'] == 'report_php_error' && count($frames) == 0) {
-                continue;
-            }
 
             $frames[] = [
                 'filename' => isset($frame['file']) ? $frame['file'] : "<internal>",
@@ -369,11 +392,14 @@ class Artemis
             ];
         }
 
-        $frames[] = array(
-            'filename' => $errfile,
-            'lineno' => $errline
-        );
+        if ($errfile != __FILE__) {
+            $frames[] = array(
+                'filename' => $errfile,
+                'lineno' => $errline
+            );
+        }
 
         return $frames;
     }
 }
+
