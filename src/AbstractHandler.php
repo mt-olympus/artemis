@@ -5,7 +5,7 @@ abstract class AbstractHandler
 {
     protected $enabled = true;
 
-    protected $logDir = 'data/kharon/artemis';
+    protected $logDir;
 
     protected $apiKey;
 
@@ -18,8 +18,7 @@ abstract class AbstractHandler
     public function __construct($config)
     {
         $this->enabled = isset($config['enabled']) ? (bool)$config['enabled'] : false;
-
-        $this->logDir = $config['log_dir'];
+        $this->logDir = isset($config['log_dir']) ? $config['log_dir'] : 'data/kharon/artemis';
 
         if (isset($config['hide_fields'])) {
             $this->hideFields = $config['hide_fields'];

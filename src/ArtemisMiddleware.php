@@ -12,16 +12,16 @@ class ArtemisMiddleware extends AbstractHandler implements ErrorMiddlewareInterf
      * {@inheritDoc}
      * @see \Zend\Stratigility\ErrorMiddlewareInterface::__invoke()
      */
-    public function __invoke($error, Request $request, Response $response, $out = null)
+    public function __invoke($error, Request $request, Response $response, callable $out = null)
     {
-        if ($error instanceof \Exception || $error instanceof \Throwable) {
+        if ($this->enabled && ($error instanceof \Exception || $error instanceof \Throwable)) {
             $this->request = $request;
             $this->handleException($error);
         }
-        return $out($request, $response);
+        return $out($request, $response, $error);
     }
 
-    private function getRequest()
+    protected function getRequest()
     {
         $request = array(
             'url' => $this->handleUrl($this->getUrl()),
@@ -49,12 +49,12 @@ class ArtemisMiddleware extends AbstractHandler implements ErrorMiddlewareInterf
         return $request;
     }
 
-    private function getUrl()
+    protected function getUrl()
     {
         return $this->request->getUri()->__toString();
     }
 
-    private function getRemoteIp()
+    protected function getRemoteIp()
     {
         $forwarded = $this->request->hasHeader('HTTP_X_FORWARDED_FOR') ? $this->request->getHeader('HTTP_X_FORWARDED_FOR')[0] : null;
         if ($forwarded) {
@@ -68,24 +68,17 @@ class ArtemisMiddleware extends AbstractHandler implements ErrorMiddlewareInterf
         return $this->request->hasHeader('REMOTE_ADDR') ? $this->request->getHeader('REMOTE_ADDR')[0] : null;
     }
 
-    private function getHeaders()
+    protected function getHeaders()
     {
-        $headers = [];
-        $list = $this->request->getHeaders();
-        foreach ($list as $key => $val) {
-            if (substr($key, 0, 5) == 'HTTP_') {
-                $name = strtolower(substr($key, 5));
-                if (strpos($name, '_') !== false) {
-                    $name = str_replace(' ', '-', ucwords(str_replace('_', ' ', $name)));
-                } else {
-                    $name = ucfirst($name);
-                }
-                $headers[$name] = $val;
+        $headers = $this->request->getHeaders();
+        $list = [];
+        foreach ($headers as $header => $value) {
+            if (count($value) == 1) {
+                $value = $value[0];
             }
+            $list[$header] = $value;
         }
-
-        return $headers;
+        return $list;
     }
 
 }
-
