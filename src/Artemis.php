@@ -35,7 +35,7 @@ class Artemis extends AbstractHandler
         return self::$instance;
     }
 
-    private function getRequest()
+    protected function getRequest()
     {
         $request = array(
             'url' => $this->handleUrl($this->getUrl()),
@@ -65,7 +65,7 @@ class Artemis extends AbstractHandler
         return $request;
     }
 
-    private function getUrl()
+    protected function getUrl()
     {
         $proto = 'http';
         if (! empty($_SERVER['HTTP_X_FORWARDED_PROTO'])) {
@@ -106,7 +106,7 @@ class Artemis extends AbstractHandler
         return $url;
     }
 
-    private function getRemoteIp()
+    protected function getRemoteIp()
     {
         $forwarded = isset($_SERVER['HTTP_X_FORWARDED_FOR']) ? $_SERVER['HTTP_X_FORWARDED_FOR'] : null;
         if ($forwarded) {
@@ -120,7 +120,7 @@ class Artemis extends AbstractHandler
         return isset($_SERVER['REMOTE_ADDR']) ? $_SERVER['REMOTE_ADDR'] : null;
     }
 
-    private function getHeaders()
+    protected function getHeaders()
     {
         $headers = [];
         foreach ($_SERVER as $key => $val) {
